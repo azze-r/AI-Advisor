@@ -1,117 +1,133 @@
-import PyPDF2
-from langchain_community.embeddings import OllamaEmbeddings
+import streamlit as st
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.chains import ConversationalRetrievalChain
-from langchain_community.chat_models import ChatOllama
-from langchain.memory import ChatMessageHistory, ConversationBufferMemory
-import chainlit as cl
+from langchain.chains import RetrievalQA
+from langchain_community.llms import Ollama
+from langchain.docstore.document import Document
+import fitz  # PyMuPDF
+import io
+import logging
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+@st.cache_resource
+def load_model_and_prepare_qa(pdf_files):
+    # Function to extract text from multiple PDFs
+    def extract_text_from_pdfs(pdf_files):
+        text = ""
+        for pdf_file in pdf_files:
+            logger.info(f"Extracting text from PDF file: {pdf_file.name}")
+            # Convert the Streamlit UploadedFile to BytesIO
+            pdf_stream = io.BytesIO(pdf_file.read())
+            doc = fitz.open(stream=pdf_stream, filetype="pdf")
+            for page in doc:
+                text += page.get_text()
+        logger.info("Extracted text from all PDF files")
+        return text
 
-@cl.on_chat_start
-async def on_chat_start():
-    files = None 
-    print("#Initialize variable to store uploaded files")
+    # Extract text from the uploaded PDF files
+    pdf_text = extract_text_from_pdfs(pdf_files)
 
-    print("# Wait for the user to upload a file")
-    while files is None:
-        files = await cl.AskFileMessage(
-            content="Please upload a pdf file to begin!",
-            accept=["application/pdf"],
-            max_size_mb=100,# Optionally limit the file size
-            timeout=180, # Set a timeout for user response,
-        ).send()
+    # Split the text into chunks
+    logger.info("Splitting text into chunks")
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=200)
+    all_splits = text_splitter.split_text(pdf_text)
 
-    file = files[0] 
-    print("# Get the first uploaded file")
-    print(file) 
-    print("# Print the file object for debugging")
+    # Convert splits to Document objects
+    logger.info("Converting text splits to Document objects")
+    documents = [Document(page_content=split) for split in all_splits]
+
+    # Generate embeddings
+    logger.info("Generating embeddings")
+    oembed = OllamaEmbeddings(model="nomic-embed-text")
+
+    # Store embeddings in Chroma vectorstore
+    logger.info("Storing embeddings in Chroma vectorstore")
+    vectorstore = Chroma.from_documents(documents=documents, embedding=oembed)
+
+    # Load the language model
+    modelChoiced = "gemma2"
+    logger.info(f"Loading language model: {modelChoiced}")
+    ollama = Ollama(model=modelChoiced)
+
+    # Create the QA chain
+    logger.info("Creating QA chain")
+    qachain = RetrievalQA.from_chain_type(ollama, retriever=vectorstore.as_retriever())
     
-    print("# Sending an image with the local file path")
-    elements = [
-    cl.Image(name="image", display="inline", path="pic.jpg")
-    ]
-    print("# Inform the user that processing has started")
-    msg = cl.Message(content=f"Processing `{file.name}`...",elements=elements)
-    await msg.send()
+    logger.info("QA system ready")
+    return qachain
 
-    print("# Read the PDF file")
-    pdf = PyPDF2.PdfReader(file.path)
-    pdf_text = ""
-    for page in pdf.pages:
-        pdf_text += page.extract_text()
-        
+# Streamlit UI components
+st.set_page_config(page_title="Document-based Chatbot with RAG", page_icon="🤖", layout="wide")
 
-    print("# Split the text into chunks")
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=50)
-    texts = text_splitter.split_text(pdf_text)
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #f5f5f5;
+    }
+    .sidebar .sidebar-content {
+        background-color: #2e3b4e;
+        color: white;
+    }
+    .st-bt {
+        background-color: #007BFF;
+        color: white;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-    print("# Create a metadata for each chunk")
-    metadatas = [{"source": f"{i}-pl"} for i in range(len(texts))]
+st.title("🤖 Document-based Chatbot with RAG")
+st.markdown("### Upload your PDFs and ask questions about their content")
 
-    print("# Create a Chroma vector store")
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
-    docsearch = await cl.make_async(Chroma.from_texts)(
-        texts, embeddings, metadatas=metadatas
-    )
-    
-    print("# Initialize message history for conversation")
-    message_history = ChatMessageHistory()
-    
-    print("# Memory for conversational context")
-    memory = ConversationBufferMemory(
-        memory_key="chat_historey",
-        output_key="answer",
-        chat_memory=message_history,
-        return_messages=True,
-    )
+# Initialize session state for chat history
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
 
-    print("# Create a chain that uses the Chroma vector store")
-    chain = ConversationalRetrievalChain.from_llm(
-        ChatOllama(model="gemma:7b"),
-        chain_type="stuff",
-        retriever=docsearch.as_retriever(),
-        memory=memory,
-        return_source_documents=True,
-    )
+# File uploader for the PDFs
+uploaded_files = st.file_uploader("Upload your PDF files", type=["pdf"], accept_multiple_files=True)
 
-    print("# Let the user know that the system is ready")
-    msg.content = f"Processing `{file.name}` done. You can now ask questions!"
-    await msg.update()
-    #store the chain in user session
-    cl.user_session.set("chain", chain)
+if uploaded_files:
+    # Load the model and prepare the QA system
+    with st.spinner("Loading model and preparing QA system..."):
+        logger.info("Loading model and preparing QA system")
+        qachain = load_model_and_prepare_qa(uploaded_files)
 
+    st.success("Model loaded and QA system ready!")
+    logger.info("Model loaded and QA system ready")
 
-@cl.on_message
-async def main(message: cl.Message):
-    print("# Retrieve the chain from user session")
-    chain = cl.user_session.get("chain") 
-    print("#call backs happens asynchronously/parallel")
-    cb = cl.AsyncLangchainCallbackHandler()
-    
-    print("# call the chain with user's message content")
-    res = await chain.ainvoke(message.content, callbacks=[cb])
-    answer = res["answer"]
-    source_documents = res["source_documents"] 
+    # Display chat history
+    for chat in st.session_state.chat_history:
+        st.markdown(f"**You:** {chat['question']}")
+        st.markdown(f"**Bot:** {chat['answer']}")
 
-    text_elements = [] 
-    print("# Initialize list to store text elements")
-    
-    print("# Process source documents if available")
-    if source_documents:
-        for source_idx, source_doc in enumerate(source_documents):
-            source_name = f"source_{source_idx}"
-            print("# Create the text element referenced in the message")
-            text_elements.append(
-                cl.Text(content=source_doc.page_content, name=source_name)
-            )
-        source_names = [text_el.name for text_el in text_elements]
-        
-        print("# Add source references to the answer")
-        if source_names:
-            answer += f"\nSources: {', '.join(source_names)}"
-        else:
-            answer += "\nNo sources found"
-    #return results
-    await cl.Message(content=answer, elements=text_elements).send()
+    # Input box for user questions
+    st.markdown("### Ask a question about the documents:")
+    question = st.text_input("Your question:", key="question_input")
+
+    if st.button("Ask"):
+        with st.spinner("Processing your question..."):
+            logger.info(f"Processing question: {question}")
+            response = qachain.invoke({"query": question})
+            answer = response["result"]
+        st.markdown(f"**You:** {question}")
+        st.markdown(f"**Bot:** {answer}")
+        logger.info(f"Answer: {answer}")
+
+        # Update chat history in session state
+        st.session_state.chat_history.append({"question": question, "answer": answer})
+
+# Footer
+st.markdown(
+    """
+    <div style="text-align: center; padding: 20px;">
+        Made with ❤️ by [Your Name]
+    </div>
+    """,
+    unsafe_allow_html=True
+)
