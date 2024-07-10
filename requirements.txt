@@ -1,0 +1,16 @@
+langchain==0.2.6
+langchain_community==0.2.6
+PyPDF2
+bs4
+chromadb
+ollama==0.2.0  # Version la plus récente compatible avec httpx >=0.27.0
+chainlit==1.1.305
+httpx==0.27.0  # Version compatible avec ollama 0.2.0
+literalai==0.0.607
+pymupdf
+torch 
+transformers 
+pillow 
+requests 
+swarms
+streamlit

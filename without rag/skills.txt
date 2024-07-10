@@ -1,0 +1,9 @@
+**Principal Skills:**
+
+- Kotlin and Java development
+- Android architecture components (MVVM, MVP, MVC)
+- Networking and data access (Retrofit, OkHttp, Room)
+- Reactive programming (RxJava)
+- Threading and concurrency (Coroutines, Workers, Flow)
+- Cloud computing (Firebase)
+- Git and version control
