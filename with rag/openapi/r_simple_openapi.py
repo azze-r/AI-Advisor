@@ -5,8 +5,7 @@ import io
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Set your OpenAI API key
-openai.api_key = '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'
-
+openai.api_key = 'xxx'
 # Function to extract text from PDF
 def extract_text_from_pdf(pdf_file):
     text = ""
