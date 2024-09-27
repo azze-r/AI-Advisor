@@ -17,3 +17,4 @@ streamlit
 huggingface_hub
 tokenizers
 datasets
+streamlit-arabic-support-wrapper
