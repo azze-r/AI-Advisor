@@ -66,7 +66,7 @@ def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-3.5-turbo"):
 def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo", max_tokens=300):
     openai.api_key = api_key
     context = "\n\n".join(context_chunks)
-    prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question:\n{question}"
+    prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question in Arabic :\n{question}"
     
     try:
         response = openai.ChatCompletion.create(
