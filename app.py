@@ -1,133 +1,186 @@
 import streamlit as st
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
-from langchain_community.llms import Ollama
-from langchain.docstore.document import Document
-import fitz  # PyMuPDF
+import openai
+import fitz  # PyMuPDF for PDF reading
 import io
-import logging
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from arabic_support import support_arabic_text
+from tiktoken import encoding_for_model  # For estimating token count
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Enable Arabic text support
+support_arabic_text(all=True)
 
-@st.cache_resource
-def load_model_and_prepare_qa(pdf_files):
-    # Function to extract text from multiple PDFs
-    def extract_text_from_pdfs(pdf_files):
-        text = ""
-        for pdf_file in pdf_files:
-            logger.info(f"Extracting text from PDF file: {pdf_file.name}")
-            # Convert the Streamlit UploadedFile to BytesIO
-            pdf_stream = io.BytesIO(pdf_file.read())
-            doc = fitz.open(stream=pdf_stream, filetype="pdf")
-            for page in doc:
-                text += page.get_text()
-        logger.info("Extracted text from all PDF files")
-        return text
+# Initialize session state for OpenAI API key, conversation history, context, and question input
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = None
 
-    # Extract text from the uploaded PDF files
-    pdf_text = extract_text_from_pdfs(pdf_files)
+if 'conversation' not in st.session_state:
+    st.session_state.conversation = []  # Initialize conversation history
 
-    # Split the text into chunks
-    logger.info("Splitting text into chunks")
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=200)
-    all_splits = text_splitter.split_text(pdf_text)
+if 'context' not in st.session_state:
+    st.session_state.context = {}  # Initialize context storage
 
-    # Convert splits to Document objects
-    logger.info("Converting text splits to Document objects")
-    documents = [Document(page_content=split) for split in all_splits]
+if 'question_input' not in st.session_state:
+    st.session_state.question_input = ""  # Initialize question input
 
-    # Generate embeddings
-    logger.info("Generating embeddings")
-    oembed = OllamaEmbeddings(model="nomic-embed-text")
+# Input field for OpenAI API key
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>مساعد PDF الذكي</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>يرجى إدخال مفتاح API الخاص بك لـ OpenAI للمتابعة.</p>", unsafe_allow_html=True)
+api_key_input = st.text_input("🔑 أدخل مفتاح OpenAI API الخاص بك هنا:", type="password")
 
-    # Store embeddings in Chroma vectorstore
-    logger.info("Storing embeddings in Chroma vectorstore")
-    vectorstore = Chroma.from_documents(documents=documents, embedding=oembed)
+# Function to extract text from a single PDF
+def extract_text_from_pdf(pdf_file):
+    text = ""
+    pdf_stream = io.BytesIO(pdf_file.read())
+    doc = fitz.open(stream=pdf_stream, filetype="pdf")
+    for page in doc:
+        text += page.get_text()
+    return text
 
-    # Load the language model
-    modelChoiced = "gemma2"
-    logger.info(f"Loading language model: {modelChoiced}")
-    ollama = Ollama(model=modelChoiced)
+# Function to extract text from multiple PDFs
+def extract_text_from_pdfs(pdf_files):
+    all_text = ""
+    for pdf_file in pdf_files:
+        all_text += extract_text_from_pdf(pdf_file) + "\n\n"
+    return all_text
 
-    # Create the QA chain
-    logger.info("Creating QA chain")
-    qachain = RetrievalQA.from_chain_type(ollama, retriever=vectorstore.as_retriever())
-    
-    logger.info("QA system ready")
-    return qachain
+# Function to split text into smaller chunks
+def split_text_into_chunks(text, chunk_size=1000, chunk_overlap=200):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    return text_splitter.split_text(text)
 
-# Streamlit UI components
-st.set_page_config(page_title="Document-based Chatbot with RAG", page_icon="🤖", layout="wide")
+# Function to estimate token count for a given text
+def estimate_token_count(text, model="gpt-3.5-turbo"):
+    encoding = encoding_for_model(model)
+    return len(encoding.encode(text))
 
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #f5f5f5;
+# Function to limit the number of chunks based on token limits
+def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-3.5-turbo"):
+    total_tokens = 0
+    limited_chunks = []
+
+    for chunk in chunks:
+        chunk_tokens = estimate_token_count(chunk, model=model)
+        if total_tokens + chunk_tokens <= max_tokens:
+            limited_chunks.append(chunk)
+            total_tokens += chunk_tokens
+        else:
+            break
+
+    return limited_chunks
+
+# Function to ask OpenAI a question based on the most relevant chunks of the PDFs
+def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo", max_tokens=300):
+    openai.api_key = api_key
+    context = "\n\n".join(context_chunks)
+    prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question in Arabic :\n{question}"
+
+    try:
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that answers questions based on the provided document."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7
+        )
+        return response.choices[0].message['content'].strip()
+    except openai.error.AuthenticationError:
+        return "مفتاح OpenAI API غير صحيح. يرجى التأكد من صحته."
+    except openai.error.InvalidRequestError as e:
+        return f"Error: {e}"
+
+# Function to process the user's question and retrieve relevant context
+def process_question(question):
+    # Retrieve relevant context from conversation history
+    context = st.session_state.context.get(question, "")
+
+    # Process the question and context using NLP techniques (if desired)
+
+    return context
+
+# Store the API key once the user submits it
+if api_key_input:
+    st.session_state.api_key = api_key_input
+    st.success("تم إدخال مفتاح API بنجاح! ✅")
+
+# Check if an API key is provided before proceeding
+if st.session_state.api_key:
+    # File uploader for PDFs (multiple file support)
+    uploaded_pdfs = st.file_uploader("📄 قم برفع ملفات PDF", type="pdf", accept_multiple_files=True)
+
+    if uploaded_pdfs:
+        with st.spinner("⏳ جاري استخراج النص من ملفات PDF..."):
+            pdf_text = extract_text_from_pdfs(uploaded_pdfs)
+
+        st.success("✅ تم استخراج النصوص بنجاح!")
+
+        # Split the text into manageable chunks
+        chunks = split_text_into_chunks(pdf_text)
+
+        # Initialize a container to dynamically add question-answer pairs
+        conversation_container = st.container()
+
+        # Display a text input for asking questions
+        question_input = st.text_input("💬 اكتب سؤالك هنا:", 
+                                      placeholder="أكتب سؤالك بالعربية", 
+                                      key="text_input", 
+                                      value=st.session_state.question_input)
+
+        if st.button("إرسال"):
+            if question_input:
+                # Add user's question to conversation history
+                st.session_state.conversation.append({"role": "user", "content": question_input})
+
+                # Retrieve context from conversation history
+                context = process_question(question_input)
+
+                # Limit the number of chunks to ensure we don't exceed token limit
+                relevant_chunks = limit_chunks_by_tokens(chunks, max_tokens=16000)
+
+                # Ask OpenAI for an answer
+                with st.spinner("🔍 جاري البحث عن المحتوى المناسب..."):
+                    answer = ask_openai_question(question_input, relevant_chunks, st.session_state.api_key)
+
+                # Add the assistant's response to the conversation history and context
+                st.session_state.conversation.append({"role": "assistant", "content": answer})
+                st.session_state.context[question_input] = context
+
+
+
+                # Display the conversation dynamically
+                with conversation_container:
+                    st.markdown("<h3>📝 المحادثة</h3>", unsafe_allow_html=True)
+                    for message in st.session_state.conversation:
+                        if message["role"] == "user":
+                            st.markdown(f"""
+                            <div style='background-color: #e1f3fb; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: right;'>
+                                <b>🧑‍💼 أنت:</b> {message['content']}
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div style='background-color: #d4f8e8; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: right;'>
+                                <b>🤖 المساعد:</b> {message['content']}
+                            </div>
+                            """, unsafe_allow_html=True)
+
+# Custom CSS for chatbot bubbles
+st.markdown("""
+<style>
+    .stTextInput, .stButton {
+        margin-top: 20px;
     }
-    .sidebar .sidebar-content {
-        background-color: #2e3b4e;
-        color: white;
+    div[data-testid="stTextInput"] {
+        width: 100%;
+        padding: 10px;
+        border-radius: 5px;
     }
-    .st-bt {
-        background-color: #007BFF;
-        color: white;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🤖 Document-based Chatbot with RAG")
-st.markdown("### Upload your PDFs and ask questions about their content")
-
-# Initialize session state for chat history
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-
-# File uploader for the PDFs
-uploaded_files = st.file_uploader("Upload your PDF files", type=["pdf"], accept_multiple_files=True)
-
-if uploaded_files:
-    # Load the model and prepare the QA system
-    with st.spinner("Loading model and preparing QA system..."):
-        logger.info("Loading model and preparing QA system")
-        qachain = load_model_and_prepare_qa(uploaded_files)
-
-    st.success("Model loaded and QA system ready!")
-    logger.info("Model loaded and QA system ready")
-
-    # Display chat history
-    for chat in st.session_state.chat_history:
-        st.markdown(f"**You:** {chat['question']}")
-        st.markdown(f"**Bot:** {chat['answer']}")
-
-    # Input box for user questions
-    st.markdown("### Ask a question about the documents:")
-    question = st.text_input("Your question:", key="question_input")
-
-    if st.button("Ask"):
-        with st.spinner("Processing your question..."):
-            logger.info(f"Processing question: {question}")
-            response = qachain.invoke({"query": question})
-            answer = response["result"]
-        st.markdown(f"**You:** {question}")
-        st.markdown(f"**Bot:** {answer}")
-        logger.info(f"Answer: {answer}")
-
-        # Update chat history in session state
-        st.session_state.chat_history.append({"question": question, "answer": answer})
-
-# Footer
-st.markdown(
-    """
-    <div style="text-align: center; padding: 20px;">
-        Made with ❤️ by [Your Name]
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style='text-align: center; padding: 10px; font-size: 14px; color: #777; margin-top: 50px;'>
+    © 2024 مساعد الـ PDF - جميع الحقوق محفوظة
+</div>
+""", unsafe_allow_html=True)
