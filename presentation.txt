@@ -1,4 +1,0 @@
-1 - Actus sur Gemma (azz)
-2 - Détail sur le RAG (ibtissam)
-3 - Implémentation simplifié pas à pas code utilisant RAG avec ollama + python + gemma (azz)
-4 - Implémentation plus poussé code utilisant RAG avec llama3 (ibtissam)

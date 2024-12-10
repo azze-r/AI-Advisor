@@ -95,8 +95,6 @@ def process_question(question):
     # Retrieve relevant context from conversation history
     context = st.session_state.context.get(question, "")
 
-    # Process the question and context using NLP techniques (if desired)
-
     return context
 
 # Store the API key once the user submits it
@@ -146,8 +144,6 @@ if st.session_state.api_key:
                 st.session_state.conversation.append({"role": "assistant", "content": answer})
                 st.session_state.context[question_input] = context
 
-
-
                 # Display the conversation dynamically
                 with conversation_container:
                     st.markdown("<h3>📝 المحادثة</h3>", unsafe_allow_html=True)
@@ -165,22 +161,55 @@ if st.session_state.api_key:
                             </div>
                             """, unsafe_allow_html=True)
 
-# Custom CSS for chatbot bubbles
+# Custom CSS for enhanced Arabian-inspired chatbot style with proper RTL support
 st.markdown("""
-<style>
-    .stTextInput, .stButton {
-        margin-top: 20px;
-    }
-    div[data-testid="stTextInput"] {
-        width: 100%;
-        padding: 10px;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Amiri&family=Cairo:wght@600&display=swap');
 
-st.markdown("""
-<div style='text-align: center; padding: 10px; font-size: 14px; color: #777; margin-top: 50px;'>
-    © 2024 مساعد الـ PDF - جميع الحقوق محفوظة
-</div>
+    body {
+        background-image: url('https://www.publicdomainpictures.net/pictures/320000/velka/plain-golden-pattern-background.jpg');
+        background-size: cover;
+        font-family: 'Amiri', serif;
+    }
+
+    .css-18e3th9 {
+        font-family: 'Cairo', sans-serif;
+    }
+
+    .stButton button {
+        background-color: #cc9966;
+        color: white;
+        border-radius: 12px;
+        padding: 10px 20px;
+        font-size: 18px;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+    }
+    .stButton button:hover {
+        background-color: #b38b5b;
+    }
+
+    .stTextInput input {
+        background-color: #f9f5ec;
+        border: 2px solid #cc9966;
+        border-radius: 10px;
+        padding: 12px;
+        color: #333333;
+        font-size: 18px;
+        text-align: right;  /* Align text to the right for Arabic */
+    }
+    .stTextInput label {
+        color: #333333;
+        font-size: 18px;
+        text-align: right;  /* Align label to the right for Arabic */
+    }
+
+    .chat-bubble {
+        background-color: #f4e3d7;
+        border-radius: 20px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0px
+    }
+    </style>
 """, unsafe_allow_html=True)
