@@ -4,7 +4,21 @@ PyPDF2==3.0.1
 chainlit==1.1.305
 httpx==0.27.0 
 literalai==0.0.607
+<<<<<<< HEAD
 pymupdf==1.25.0
 streamlit==1.41.0
 streamlit-arabic-support-wrapper==1.1
 tiktoken==0.8.0
+=======
+pymupdf
+torch 
+transformers 
+pillow 
+requests 
+swarms
+streamlit==1.39.0
+huggingface_hub
+tokenizers
+datasets
+streamlit-arabic-support-wrapper
+>>>>>>> e06181bb21747422ec010f842ddb6f938992b523
