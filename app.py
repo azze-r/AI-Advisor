@@ -2,6 +2,7 @@ import streamlit as st
 import openai
 import fitz  # PyMuPDF for PDF reading
 import io
+import re
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from arabic_support import support_arabic_text
 from tiktoken import encoding_for_model  # For estimating token count
@@ -23,7 +24,7 @@ if 'question_input' not in st.session_state:
     st.session_state.question_input = ""  # Initialize question input
 
 # Input field for OpenAI API key
-st.markdown("<h1 style='text-align: center; color: #4CAF50;'>مساعد PDF الذكي</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #006400;'>مساعد PDF الذكي</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center;'>يرجى إدخال مفتاح API الخاص بك لـ OpenAI للمتابعة.</p>", unsafe_allow_html=True)
 api_key_input = st.text_input("🔑 أدخل مفتاح OpenAI API الخاص بك هنا:", type="password")
 
@@ -33,7 +34,10 @@ def extract_text_from_pdf(pdf_file):
     pdf_stream = io.BytesIO(pdf_file.read())
     doc = fitz.open(stream=pdf_stream, filetype="pdf")
     for page in doc:
-        text += page.get_text()
+        page_text = page.get_text()
+        # Sanitize the text by replacing all 10-digit numbers with "xxxxxxxxxx"
+        sanitized_text = re.sub(r'\d{10}', 'xxxxxxxxxx', page_text)
+        text += sanitized_text
     return text
 
 # Function to extract text from multiple PDFs
@@ -77,10 +81,8 @@ def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo"
     try:
         response = openai.ChatCompletion.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that answers questions based on the provided document."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "system", "content": "You are a helpful assistant that answers questions based on the provided document."},
+                      {"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0.7
         )
@@ -94,7 +96,6 @@ def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo"
 def process_question(question):
     # Retrieve relevant context from conversation history
     context = st.session_state.context.get(question, "")
-
     return context
 
 # Store the API key once the user submits it
@@ -150,13 +151,13 @@ if st.session_state.api_key:
                     for message in st.session_state.conversation:
                         if message["role"] == "user":
                             st.markdown(f"""
-                            <div style='background-color: #e1f3fb; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: right;'>
+                            <div class='chat-bubble user'>
                                 <b>🧑‍💼 أنت:</b> {message['content']}
                             </div>
                             """, unsafe_allow_html=True)
                         else:
                             st.markdown(f"""
-                            <div style='background-color: #d4f8e8; border-radius: 10px; padding: 10px; margin: 10px 0; text-align: right;'>
+                            <div class='chat-bubble assistant'>
                                 <b>🤖 المساعد:</b> {message['content']}
                             </div>
                             """, unsafe_allow_html=True)
@@ -164,18 +165,32 @@ if st.session_state.api_key:
 # Custom CSS for enhanced Arabian-inspired chatbot style with proper RTL support
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Amiri&family=Cairo:wght@600&display=swap');
-
+    @import url('https://fonts.googleapis.com/css2?family=Almarai&family=Noto+Sans+Arabic&display=swap');
+    
     body {
-        background-image: url('https://www.publicdomainpictures.net/pictures/320000/velka/plain-golden-pattern-background.jpg');
-        background-size: cover;
-        font-family: 'Amiri', serif;
+        background: linear-gradient(45deg, #006400, #8B4513);  /* Green and brown */
+        font-family: 'Almarai', sans-serif;
+        color: white;
     }
-
-    .css-18e3th9 {
-        font-family: 'Cairo', sans-serif;
+    
+    .chat-bubble {
+        background-color: #f4e3d7;
+        border-radius: 20px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.1);
     }
-
+    
+    .chat-bubble.user {
+        background-color: #e8f5e9;
+        text-align: right;
+    }
+    
+    .chat-bubble.assistant {
+        background-color: #c8e6c9;
+        text-align: right;
+    }
+    
     .stButton button {
         background-color: #cc9966;
         color: white;
@@ -185,6 +200,7 @@ st.markdown("""
         font-weight: bold;
         transition: background-color 0.3s ease;
     }
+    
     .stButton button:hover {
         background-color: #b38b5b;
     }
@@ -196,20 +212,14 @@ st.markdown("""
         padding: 12px;
         color: #333333;
         font-size: 18px;
-        text-align: right;  /* Align text to the right for Arabic */
+        text-align: right;
     }
+    
     .stTextInput label {
         color: #333333;
         font-size: 18px;
-        text-align: right;  /* Align label to the right for Arabic */
+        text-align: right;
     }
-
-    .chat-bubble {
-        background-color: #f4e3d7;
-        border-radius: 20px;
-        padding: 15px;
-        margin-bottom: 10px;
-        box-shadow: 0px
-    }
+    
     </style>
 """, unsafe_allow_html=True)

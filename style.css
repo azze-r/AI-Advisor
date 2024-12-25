@@ -1,0 +1,49 @@
+
+    @import url('https://fonts.googleapis.com/css2?family=Amiri&family=Cairo:wght@600&display=swap');
+
+    body {
+        background-image: url('https://www.publicdomainpictures.net/pictures/320000/velka/plain-golden-pattern-background.jpg');
+        background-size: cover;
+        font-family: 'Amiri', serif;
+    }
+
+    .css-18e3th9 {
+        font-family: 'Cairo', sans-serif;
+    }
+
+    .stButton button {
+        background-color: #cc9966;
+        color: white;
+        border-radius: 12px;
+        padding: 10px 20px;
+        font-size: 18px;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+    }
+    .stButton button:hover {
+        background-color: #b38b5b;
+    }
+
+    .stTextInput input {
+        background-color: #f9f5ec;
+        border: 2px solid #cc9966;
+        border-radius: 10px;
+        padding: 12px;
+        color: #333333;
+        font-size: 18px;
+        text-align: right;  /* Align text to the right for Arabic */
+    }
+    .stTextInput label {
+        color: #333333;
+        font-size: 18px;
+        text-align: right;  /* Align label to the right for Arabic */
+    }
+
+    .chat-bubble {
+        background-color: #f4e3d7;
+        border-radius: 20px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0px
+    }
+   
