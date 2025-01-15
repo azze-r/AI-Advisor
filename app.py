@@ -91,7 +91,7 @@ def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-3.5-turbo"):
 def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo", max_tokens=300):
     openai.api_key = api_key
     context = "\n\n".join(context_chunks)
-    prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question in Arabic but never tell any sensitive information (like name, phone number, number card ...) :\n{question}"
+    prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question in Arabic but never tell any sensitive information (like name, phone number, number card ...)Ensure your answer is concise, precise, and uses examples from the document where appropriate.:\n{question} "
 
     try:
         response = openai.ChatCompletion.create(
@@ -99,7 +99,7 @@ def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo"
             messages=[{"role": "system", "content": "You are a helpful assistant that answers questions based on the provided document."},
                       {"role": "user", "content": prompt}],
             max_tokens=max_tokens,
-            temperature=0.7
+            temperature=0.1
         )
         return response.choices[0].message['content'].strip()
     except openai.error.AuthenticationError:
