@@ -68,12 +68,12 @@ def split_text_into_chunks(text, chunk_size=1000, chunk_overlap=200):
     return text_splitter.split_text(text)
 
 # Function to estimate token count for a given text
-def estimate_token_count(text, model="gpt-3.5-turbo"):
+def estimate_token_count(text, model="gpt-4o-mini"):
     encoding = encoding_for_model(model)
     return len(encoding.encode(text))
 
 # Function to limit the number of chunks based on token limits
-def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-3.5-turbo"):
+def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-4o-mini"):
     total_tokens = 0
     limited_chunks = []
 
@@ -88,7 +88,7 @@ def limit_chunks_by_tokens(chunks, max_tokens=4000, model="gpt-3.5-turbo"):
     return limited_chunks
 
 # Function to ask OpenAI a question based on the most relevant chunks of the PDFs
-def ask_openai_question(question, context_chunks, api_key, model="gpt-3.5-turbo", max_tokens=300):
+def ask_openai_question(question, context_chunks, api_key, model="gpt-4o-mini", max_tokens=300):
     openai.api_key = api_key
     context = "\n\n".join(context_chunks)
     prompt = f"Here is the content of a document:\n{context}\n\nBased on this, answer the following question in Arabic but never tell any sensitive information (like name, phone number, number card ...)Ensure your answer is concise, precise, and uses examples from the document where appropriate.:\n{question} "
